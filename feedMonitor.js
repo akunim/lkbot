@@ -2,6 +2,7 @@ const RichEmbed = require("discord.js").RichEmbed;
 const Parser = require('rss-parser');
 const parser = new Parser();
 const https = require("https");
+const fs = require("fs");
 
 var sqlite3 = require('sqlite3').verbose();
 let db = new sqlite3.Database('feedMonitor.db');
@@ -9,7 +10,7 @@ let db = new sqlite3.Database('feedMonitor.db');
     db.run("CREATE TABLE feeds (url TEXT, lastPoll TEXT)", [], (err) =>{
       if (err){
         //throw err;
-        console.log("Database already exists");
+        console.log("Feed monitor database already exists");
       }
     });  
   }
@@ -21,6 +22,7 @@ async function initCheckComicUpdate( url, alertChan ){
   let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
   let result = await readDb( query );
   let feed = await pollFeed( url );
+  // If this url already has a polling entry
   if (result !== undefined || result !== "" || result.length > 1){
     result.forEach((row) => {
       let json = JSON.parse(row.lastPoll);
@@ -39,6 +41,7 @@ async function initCheckComicUpdate( url, alertChan ){
     })    
   }
   else {
+    // If this is the first time the URL is being polled
     saveFeed( url, JSON.stringify(feed) );
   }
 }
@@ -74,7 +77,6 @@ function readDb( query ){
       resolve(result);
     });    
   })
-
 }
 
 function pollFeed( url ){
@@ -106,6 +108,64 @@ function pollApi( url ) {
   })
 }
 
+async function saveFeed( url, feedData ){
+  let db = new sqlite3.Database('feedMonitor.db');
+  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
+  
+    db.all(query, [], (err, result) => {
+      // Update existing URL
+      if (result.length > 0){
+        let data = [feedData, url];
+        let q = "UPDATE feeds SET lastPoll = ? WHERE url = ?"
+
+        db.run(q, data, (err)=> {
+          if (err){
+            console.log(err);
+          }
+        })
+      }
+      // Insert new URL and values
+      else {
+        let q = "INSERT INTO feeds VALUES (?,?)";
+
+        db.run(q, [url, JSON.stringify(feedData)], (err) => {
+          if (err){
+            console.log(err);
+          }
+        });      
+      }
+    })
+}
+
+
+//****************************************************
+// Manual versions of the above functions, for testing
+//****************************************************
+async function manualCheckComicFeed(msg){
+  let url = "http://latchkeykingdom.smackjeeves.com/rss/";
+  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
+  let result = await readDb( query );
+  let feed = await pollFeed( url );
+  if (result !== undefined || result !== "" || result.length > 1){
+    result.forEach((row) => {
+      let json = JSON.parse(row.lastPoll);
+      
+      msg.channel.send("Checking for a new comic...");
+      
+      if (feed.items[0].guid !== json.items[0].guid){
+        msg.channel.send("New Comic found! Trying to save...");
+        saveFeed( url, JSON.stringify(feed) );
+      }
+    })
+  }
+}
+
+async function readDbAsync( msg, query ){
+  var result = await readDb( query );
+  fs.writeFile("./dbresult", JSON.stringify(result));
+  msg.channel.send( "Write file..." );
+}
+
 function pollUrlNoPromise( url, callback ){
   https.get(url, (res) => {
     let data = '';
@@ -125,36 +185,10 @@ function pollUrlNoPromise( url, callback ){
     });  
 }
 
-async function saveFeed( url, feedData ){
-  let db = new sqlite3.Database('feedMonitor.db');
-  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
-  db.all(query, [], (err, result) => {
-    // Update existing URL
-    if (result.length > 0){
-      let data = [feedData, url];
-      let q = "UPDATE feeds SET lastPoll = ? WHERE url = ?"
-      
-      db.run(q, data, (err)=> {
-        if (err){
-          console.log(err);
-        }
-      })
-    }
-    // Insert new URL and values
-    else {
-      let q = "INSERT INTO feeds VALUES (?,?)";
-
-      db.run(q, [url, JSON.stringify(feedData)], (err) => {
-        if (err){
-          console.log(err);
-        }
-      });      
-    }
-  })
-}
-
 module.exports = {
   initCheckComicUpdate: initCheckComicUpdate,
   initCheckStream: initCheckStream,
-  pollUrl: pollUrlNoPromise
+  pollUrl: pollUrlNoPromise,
+  readDb: readDbAsync, 
+  manualCheckComicFeed: manualCheckComicFeed
 }

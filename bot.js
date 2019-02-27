@@ -4,6 +4,7 @@ const client = new Discord.Client();
 const rp = require('request-promise');
 
 const monitor = require("./feedMonitor.js");
+const fun = require("./fun.js");
 
 var secrets;
 
@@ -31,14 +32,13 @@ client.on('ready', () => {
         announcementChannel = channel;
       }
     })
-  })  
+  })
   function comicMon() {
     monitor.initCheckComicUpdate("http://latchkeykingdom.smackjeeves.com/rss/", announcementChannel)
   }
   function streamMon() {
     monitor.initCheckStream("https://api.picarto.tv/v1/channel/name/LKComic", announcementChannel);
   }
-  //304823513124962305 
   setInterval(comicMon, 30000);
   setInterval(streamMon, 30000);
 });
@@ -66,14 +66,16 @@ client.on('message', msg => {
         //msg.channel.send("👏"); 
       }
       
-      if (command === "fm"){
+      if (command === "test"){
         if (params[0] == "info"){
+        }
+        if (params[0] == "comic"){
+          //monitor.readDb( msg, "SELECT * FROM feeds" );
+          monitor.manualCheckComicFeed(msg);
         }
       }
       if (command === "random"){
-        monitor.pollUrl("https://latchkeykingdom.smackjeeves.com/comics/random", (res) => {
-          msg.channel.send(res.headers.location);
-        });        
+        fun.randomComic( msg );
       }
     }
   } // END don't talk to self
