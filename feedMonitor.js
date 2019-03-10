@@ -113,26 +113,31 @@ async function saveFeed( url, feedData ){
   let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
   
     db.all(query, [], (err, result) => {
-      // Update existing URL
-      if (result.length > 0){
-        let data = [feedData, url];
-        let q = "UPDATE feeds SET lastPoll = ? WHERE url = ?"
-
-        db.run(q, data, (err)=> {
-          if (err){
-            console.log(err);
-          }
-        })
+      if (err){
+        console.log(err);
       }
-      // Insert new URL and values
-      else {
-        let q = "INSERT INTO feeds VALUES (?,?)";
+      else{
+        // Update existing URL
+        if (result.length > 0){
+          let data = [feedData, url];
+          let q = "UPDATE feeds SET lastPoll = ? WHERE url = ?"
 
-        db.run(q, [url, JSON.stringify(feedData)], (err) => {
-          if (err){
-            console.log(err);
-          }
-        });      
+          db.run(q, data, (err)=> {
+            if (err){
+              console.log(err);
+            }
+          })
+        }
+        // Insert new URL and values
+        else {
+          let q = "INSERT INTO feeds VALUES (?,?)";
+
+          db.run(q, [url, JSON.stringify(feedData)], (err) => {
+            if (err){
+              console.log(err);
+            }
+          });      
+        }
       }
     })
 }
