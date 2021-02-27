@@ -1,88 +1,146 @@
+const Discord = require('discord.js');
 const RichEmbed = require("discord.js").RichEmbed;
 const Parser = require('rss-parser');
 const parser = new Parser();
 const https = require("https");
 const fs = require("fs");
 
-var sqlite3 = require('sqlite3').verbose();
-let db = new sqlite3.Database('feedMonitor.db');
-  try {
-    db.run("CREATE TABLE feeds (url TEXT, lastPoll TEXT)", [], (err) =>{
-      if (err){
-        //throw err;
-        console.log("Feed monitor database already exists");
-      }
-    });  
+const feedDb = require('./feedDatabaseHandler.js');
+
+async function check( feed ){
+
+  console.log(feed);
+
+  var changeTest = new Promise((resolve) => {
+    resolve ("Hello");
+  })
+
+  // switch ( feed.type ){
+  //   case "rss-comic":
+  //     changeTest = rssComicChangeTest(feed);
+  //     break;
+  //   case "stream-picarto":
+  //     changeTest = streamPicartoChangeTest(feed);
+  //     break;
+  // } 
+
+  if (feed.type == "rss-comic"){
+    console.log("YO");
+    changeTest = rssComicChangeTest(feed);
   }
-  catch (e){
-    console.log("Database exists -- probably");
+  else if (feed.type == "stream-picarto") {
+    console.log("YA");
+    changeTest = streamPicartoChangeTest(feed);
   }
 
-async function initCheckComicUpdate( url, alertChan ){
-  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
-  let result = await readDb( query );
-  let feed = await pollFeed( url );
-  // If this url already has a polling entry
-  if (result !== undefined || result !== "" || result.length > 1){
-    result.forEach((row) => {
-      let json = JSON.parse(row.lastPoll);
-      
-      if (feed.items[0].guid !== json.items[0].guid){
-        // Update detected
-        const embed = new RichEmbed()
-          .setTitle(feed.items[0].title)
-          .setColor(0xFF0000)
-          .setDescription(feed.items[0].pubDate + "\n" + feed.items[0].link)
-          .attachFiles(["./logo.webp"]);
-        alertChan.send(embed);
-        saveFeed( url, JSON.stringify(feed) );
-      }
-      
-    })    
+  changeTest.then((result) => {
+    console.log(result);
+  })  
+  if (changeTest.result){
+    console.log("Change Detected");
+    // alertChan.send(changeTest.response);
   }
-  else {
-    // If this is the first time the URL is being polled
-    saveFeed( url, JSON.stringify(feed) );
-  }
+
+  // if (changeTest.result){
+  //   console.log("Change Detected");
+    
+  // };
 }
 
-async function initCheckStream( url, alertChan ){
-  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
-  let api = await pollApi( url );
-  let apiJson = JSON.parse(api);
-  if (apiJson.online){
-    let result = await readDb( query );
-
-    if (result !== undefined || result !== "" || result.length > 1){
-      result.forEach((row) => {
-        let json = JSON.parse(row.lastPoll);
-        // If the last stored value was 'offline', send an alert
-        if (!json.online){
-          const embed = new RichEmbed()
-            .setTitle(apiJson.name + " is streaming")
-            .setColor(0xFF0000)
-            .setDescription("https://picarto.tv/" + apiJson.name + " \n adult: " + apiJson.adult)
-            .attachFiles([apiJson.thumbnails.web]);
-          alertChan.send(embed);
-        }
+async function rssComicChangeTest( feed ){
+  return new Promise (resolve => {
+    let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + feed.url + "'";
+    let lastSavedPollPromise = new Promise( function(resolve, reject) {
+      feedDb.read(query).then( function( result) {
+        resolve(result);
       })
-    }
-  }
-  saveFeed( url, api );
-}
+    });
+    let livePollPromise = new Promise( function(resolve, reject) {
+      pollFeed( feed.url ).then( function( result ) {
+        resolve(result);
+      });
+    });
 
-function readDb( query ){
-  return new Promise( resolve => {
-    db.all(query, [], (err, result) => {
-      resolve(result);
-    });    
+    lastSavedPollPromise.then( function(result) {
+      var lastSavedPoll = JSON.parse(result[0].lastPoll);
+
+      livePollPromise.then( function(result) {
+        var livePoll = result;
+        // If this url already has a polling entry
+        if (lastSavedPoll != null){
+
+          // If update is detected
+          if (livePoll.items[0].guid !== lastSavedPoll.items[0].guid){
+            var didSaveWork = feedDb.save( feed.url, livePoll );
+
+            didSaveWork.then(
+              function(val){
+                if (val){
+                  const embed = new RichEmbed()
+                  .setTitle(livePoll.items[0].title)
+                  .setColor(0xFF0000)
+                  .setDescription(livePoll.items[0].pubDate + "\n" + livePoll.items[0].link)
+                  .attachFiles(["./logo.webp"]);
+                  resolve( true, embed );
+                }
+              }).catch(
+                (reason) => {
+                  console.log(reason);
+                }
+              );
+            }
+        }
+        else {
+          // If this is the first time the URL is being polled
+          console.log("Feed not found");
+          feedDb.save( feed.url, livePoll );
+        }        
+      });
+    })
   })
 }
 
-function pollFeed( url ){
+async function streamPicartoChangeTest( url ){
+  return new Promise( (resolve, reject)=> {
+    resolve("Hello");
+  })
+}
+
+// async function streamPicartoChangeTest( url, alertChan ){
+//   //console.log("STREAM: Checking for update... \n");
+//   let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
+//   let api = await pollApi( url );
+//   let apiJson = JSON.parse(api);
+//   if (apiJson.online){
+//     let result = await readDb( query );
+
+//     if (result !== undefined || result !== "" || result.length > 1){
+//       result.forEach((row) => {
+//         let json = JSON.parse(row.lastPoll);
+
+//         // If stream is detected
+//         if (!json.online){
+//           const embed = new RichEmbed()
+//             .setTitle(apiJson.name + " is streaming")
+//             .setColor(0xFF0000)
+//             .setDescription("https://picarto.tv/" + apiJson.name + " \n adult: " + apiJson.adult)
+//             .attachFiles([apiJson.thumbnails.web]);
+//           //alertChan.send(embed);
+//           console.log("STREAM: Update detected \n");
+//         }
+//         else {
+//           //console.log("STREAM: No update detected \n");
+//         }
+//       })
+//     }
+//   }
+//   saveFeed( url, api );
+// }
+
+async function pollFeed( url ){
   return new Promise(resolve => {
     parser.parseURL(url, (err, feed) =>{
-      resolve(feed);      
+      resolve(feed);
     });
   })
 }
@@ -106,40 +164,6 @@ function pollApi( url ) {
         console.log("Error: " + err.message);
       });
   })
-}
-
-async function saveFeed( url, feedData ){
-  let db = new sqlite3.Database('feedMonitor.db');
-  let query = 'SELECT lastPoll FROM feeds WHERE url like \'' + url + "'";
-  
-    db.all(query, [], (err, result) => {
-      if (err){
-        console.log(err);
-      }
-      else{
-        // Update existing URL
-        if (result.length > 0){
-          let data = [feedData, url];
-          let q = "UPDATE feeds SET lastPoll = ? WHERE url = ?"
-
-          db.run(q, data, (err)=> {
-            if (err){
-              console.log(err);
-            }
-          })
-        }
-        // Insert new URL and values
-        else {
-          let q = "INSERT INTO feeds VALUES (?,?)";
-
-          db.run(q, [url, JSON.stringify(feedData)], (err) => {
-            if (err){
-              console.log(err);
-            }
-          });      
-        }
-      }
-    })
 }
 
 
@@ -191,8 +215,9 @@ function pollUrlNoPromise( url, callback ){
 }
 
 module.exports = {
-  initCheckComicUpdate: initCheckComicUpdate,
-  initCheckStream: initCheckStream,
+  check : check,
+  rssComicChangeTest: rssComicChangeTest,
+  streamPicartoChangeTest: streamPicartoChangeTest,
   pollUrl: pollUrlNoPromise,
   readDb: readDbAsync, 
   manualCheckComicFeed: manualCheckComicFeed

@@ -1,0 +1,19 @@
+{
+  "name": "lkbot",
+  "version": "0.0.1",
+  "description": "Bot that monitors streams and comic updates for lk discord",
+  "main": "main.js",
+  "repository": "https://github.com/akunim/lkbot",
+  "author": "akunim <akunim.draws@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "start": "node dist",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "discord.js": "^11.5.1",
+    "request-promise": "^4.2.5",
+    "rss-parser": "^3.7.5",
+    "sqlite3": "^4.1.1"
+  }
+}

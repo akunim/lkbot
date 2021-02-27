@@ -4,6 +4,7 @@ const client = new Discord.Client();
 const rp = require('request-promise');
 
 const monitor = require("./feedMonitor.js");
+const feedDb = require('./feedDatabaseHandler.js');
 const fun = require("./fun.js");
 
 var secrets;
@@ -33,14 +34,37 @@ client.on('ready', () => {
       }
     })
   })
-  function comicMon() {
-    monitor.initCheckComicUpdate("http://latchkeykingdom.smackjeeves.com/rss/", announcementChannel)
+
+  // Ideally this should be a loop on a list of URLs to check
+  //   would need the URL and probably a 'type', so that it
+  //   knows what function to use for detecting changes
+  // EXAMPLE: 
+  // function() // set interval 30 seconds
+  //   forEach(feed in feedsToMonitor)
+  //     monitor.feedCheck(feed.url, feed.type, )
+
+  function initMontitor() {
+    let query = 'SELECT * FROM feeds';
+    let readFeeds = new Promise( function(resolve, reject) {
+      feedDb.read(query).then( function(result) {
+        resolve(result);
+      })
+    });
+
+    readFeeds.then( function(result){
+      console.log(result);
+    })
   }
-  function streamMon() {
-    monitor.initCheckStream("https://api.picarto.tv/v1/channel/name/LKComic", announcementChannel);
-  }
-  setInterval(comicMon, 30000);
-  setInterval(streamMon, 30000);
+
+  // function comicMon() {
+  //   monitor.initCheckComicUpdate("http://latchkeykingdom.thecomicseries.com/rss", announcementChannel)
+  // }
+  // function streamMon() {
+  //   monitor.initCheckStream("https://api.picarto.tv/v1/channel/name/LKComic", announcementChannel);
+  // }
+  // setInterval(comicMon, 30000);
+  // setInterval(streamMon, 30000);
+
 });
 
 client.on('message', msg => {
